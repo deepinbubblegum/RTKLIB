@@ -75,6 +75,7 @@
 
 typedef struct {                       /* console type */
     int state;                         /* state (0:stop,1:run) */
+    int start;                         /* start (0:non,1:auto-start) */
     vt_t *vt;                          /* virtual terminal */
     pthread_t thread;                  /* console thread */
 } con_t;
@@ -178,9 +179,9 @@ static const char *pathopts[]={         /* path options help */
 #define TIMOPT  "0:gpst,1:utc,2:jst,3:tow"
 #define CONOPT  "0:dms,1:deg,2:xyz,3:enu,4:pyl"
 #define FLGOPT  "0:off,1:std+2:age/ratio/ns"
-#define ISTOPT  "0:off,1:serial,2:file,3:tcpsvr,4:tcpcli,7:ntripcli,8:ftp,9:http"
-#define OSTOPT  "0:off,1:serial,2:file,3:tcpsvr,4:tcpcli,6:ntripsvr,11:ntripc_c"
-#define FMTOPT  "0:rtcm2,1:rtcm3,2:oem4,3:oem3,4:ubx,5:ss2,6:hemis,7:skytraq,8:gw10,9:javad,10:nvs,11:binex,12:rt17,13:sbf,14:cmr,15:tersus,18:sp3"
+#define ISTOPT  "0:off,1:serial,2:file,3:tcpsvr,4:tcpcli,6:ntripcli,7:ftp,8:http,10:udpsvr,11:udpcli"
+#define OSTOPT  "0:off,1:serial,2:file,3:tcpsvr,4:tcpcli,5:ntripsvr,9:ntripc_c,10:udpsvr,11:udpcli"
+#define FMTOPT  "0:rtcm2,1:rtcm3,2:oem4,3:oem3,4:ubx,5:ss2,6:hemis,7:skytraq,8:javad,9:nvs,10:binex,11:rt17,12:sbf,13:rinex,14:sp3"
 #define NMEOPT  "0:off,1:latlon,2:single"
 #define SOLOPT  "0:llh,1:xyz,2:enu,3:nmea,4:stat"
 #define MSGOPT  "0:all,1:rover,2:base,3:corr"
@@ -466,6 +467,7 @@ static int startsvr(vt_t *vt)
         trace(2,"command exec error: %s (%d)\n",startcmd,ret);
         vt_printf(vt,"command exec error: %s (%d)\n",startcmd,ret);
     }
+    solopt[1]=solopt[0];
     solopt[0].posf=strfmt[3];
     solopt[1].posf=strfmt[4];
     
@@ -921,11 +923,11 @@ static void prstream(vt_t *vt)
         "log rover","log base","log corr","monitor"
     };
     const char *type[]={
-        "-","serial","file","tcpsvr","tcpcli","udp","ntrips","ntripc","ftp",
-        "http","ntripc_s","ntripc_c"
+        "-","serial","file","tcpsvr","tcpcli","ntrips","ntripc","ftp",
+        "http","ntripcas","udpsvr","udpcli"
     };
     const char *fmt[]={"rtcm2","rtcm3","oem4","oem3","ubx","ss2","hemis","skytreq",
-                       "gw10","javad","nvs","binex","rt17","sbf","cmr","","","sp3",""};
+                       "javad","nvs","binex","rt17","sbf","rinex","sp3","","","",""};
     const char *sol[]={"llh","xyz","enu","nmea","stat","-"};
     stream_t stream[9];
     int i,format[9]={0};
@@ -1349,6 +1351,12 @@ static void *con_thread(void *arg)
         con->state=0;
         return 0;
     }
+
+    if (con->start) {
+      cmd_start(args,narg,con->vt);
+      con->start=0;
+    }
+
     while (con->state) {
         
         /* output prompt */
@@ -1410,7 +1418,7 @@ static void *con_thread(void *arg)
     return 0;
 }
 /* open console --------------------------------------------------------------*/
-static con_t *con_open(int sock, const char *dev)
+static con_t *con_open(int sock, const char *dev, int start)
 {
     con_t *con;
     
@@ -1421,6 +1429,10 @@ static con_t *con_open(int sock, const char *dev)
     if (!(con->vt=vt_open(sock,dev))) {
         free(con);
         return NULL;
+    }
+
+    if (start) {
+      con->start=1;
     }
     /* start console thread */
     con->state=1;
@@ -1493,9 +1505,9 @@ static void accept_sock(int ssock, con_t **con)
     }
     for (i=1;i<MAXCON;i++) {
         if (con[i]) continue;
-        
-        con[i]=con_open(sock,"");
-        
+
+        con[i]=con_open(sock,"",0);
+
         trace(3,"remote console connected: addr=%s\n",
               inet_ntoa(addr.sin_addr));
         return;
@@ -1666,7 +1678,7 @@ int main(int argc, char **argv)
     }
     else {
         /* open device for local console */
-        if (!(con[0]=con_open(0,dev))) {
+        if (!(con[0]=con_open(0,dev,start))) {
             fprintf(stderr,"console open error dev=%s\n",dev);
             if (moniport>0) closemoni();
             if (outstat>0) rtkclosestat();
@@ -1680,10 +1692,6 @@ int main(int argc, char **argv)
     signal(SIGHUP ,SIG_IGN);
     signal(SIGPIPE,SIG_IGN);
     
-    /* start rtk server */
-    if (start) {
-        startsvr(NULL);
-    }
     while (!intflg) {
         /* accept remote console connection */
         accept_sock(sock,con);

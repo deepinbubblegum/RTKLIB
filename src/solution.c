@@ -1143,24 +1143,36 @@ static int outecef(uint8_t *buff, const char *s, const sol_t *sol,
 {
     const char *sep=opt2sep(opt);
     char *p=(char *)buff;
+    double pos[3],vel[3],dms1[3],dms2[3],P[9],Q[9];
     
     trace(3,"outecef:\n");
     
-    p+=sprintf(p,"%s%s%14.4f%s%14.4f%s%14.4f%s%3d%s%3d%s%8.4f%s%8.4f%s%8.4f%s"
-               "%8.4f%s%8.4f%s%8.4f%s%6.2f%s%6.1f",
-               s,sep,sol->rr[0],sep,sol->rr[1],sep,sol->rr[2],sep,sol->stat,sep,
-               sol->ns,sep,SQRT(sol->qr[0]),sep,SQRT(sol->qr[1]),sep,
-               SQRT(sol->qr[2]),sep,sqvar(sol->qr[3]),sep,sqvar(sol->qr[4]),sep,
-               sqvar(sol->qr[5]),sep,sol->age,sep,sol->ratio);
-    
-    if (opt->outvel) { /* output velocity */
-        p+=sprintf(p,"%s%10.5f%s%10.5f%s%10.5f%s%9.5f%s%8.5f%s%8.5f%s%8.5f%s"
-                   "%8.5f%s%8.5f",
-                   sep,sol->rr[3],sep,sol->rr[4],sep,sol->rr[5],sep,
-                   SQRT(sol->qv[0]),sep,SQRT(sol->qv[1]),sep,SQRT(sol->qv[2]),
-                   sep,sqvar(sol->qv[3]),sep,sqvar(sol->qv[4]),sep,
-                   sqvar(sol->qv[5]));
+    /* Added output of latitude and longitude. @SEKINO 19/9/12 ------------------------------------ */
+    ecef2pos(sol->rr,pos);
+    soltocov(sol,P);
+    covenu(pos,P,Q);
+    if (opt->height==1) { /* geodetic height */
+        /*pos[2]-=geoidh(pos);*/
     }
+    if (opt->degf) {
+        deg2dms(pos[0]*R2D,dms1,5);
+        deg2dms(pos[1]*R2D,dms2,5);
+    }
+    /* Added output of latitude and longitude. @SEKINO 19/9/12 ------------------------------------ */
+    
+    /* Change data delimitation and output format @SEKINO 19/3/8 ---------------------------------- */
+    p+=sprintf(p,"\n%s\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n%.9f\n%.9f\n%.4f\n%d\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n",
+               s,sol->rr[0],sol->rr[1],sol->rr[2],sol->rr[3],sol->rr[4],sol->rr[5],
+               pos[0]*R2D,pos[1]*R2D,pos[2],sol->stat,SQRT(Q[4]),
+               SQRT(Q[0]),SQRT(Q[8]),sqvar(Q[1]),sqvar(Q[2]),sqvar(Q[5]));
+
+    if (opt->outvel) { /* output velocity */
+        p+=sprintf(p,"\n%s\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n%.9f\n%.9f\n%.4f\n%d\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n%.4f\n",
+                   s,sol->rr[0],sol->rr[1],sol->rr[2],sol->rr[3],sol->rr[4],sol->rr[5],
+                   pos[0]*R2D,pos[1]*R2D,pos[2],sol->stat,SQRT(Q[4]),
+                   SQRT(Q[0]),SQRT(Q[8]),sqvar(Q[1]),sqvar(Q[2]),sqvar(Q[5]));
+    }
+    /* Change data delimitation and output format @SEKINO 19/3/8 ---------------------------------- */
     p+=sprintf(p,"\r\n");
     return p-(char *)buff;
 }

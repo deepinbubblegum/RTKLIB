@@ -1761,6 +1761,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     gtime_t time;
     int i,nu,nr;
     char msg[128]="";
+    int f,nf=NF(&rtk->opt);
     
     trace(3,"rtkpos  : time=%s n=%d\n",time_str(obs[0].time,3),n);
     trace(4,"obs=\n"); traceobs(4,obs,n);
@@ -1805,6 +1806,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     /* check number of data of base station and age of differential */
     if (nr==0) {
         errmsg(rtk,"no base station observation data for rtk\n");
+        rtk->sol.stat=SOLQ_SINGLE;
         outsolstat(rtk);
         return 1;
     }
@@ -1832,6 +1834,16 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
         if (fabs(rtk->sol.age)>opt->maxtdiff) {
             errmsg(rtk,"age of differential error (age=%.1f)\n",rtk->sol.age);
             outsolstat(rtk);
+            
+            /* Change to SINGLE if base station data is lost @Takanose 20/4/30 ------------------------------------*/
+            rtk->sol.stat=SOLQ_SINGLE;
+            for (f=0;f<nf;f++) {
+                for (i=1;i<=MAXSAT;i++) {
+                    initx(rtk,0.0,0.0,IB(i,f,&rtk->opt));
+                }
+            }
+            /* Change to SINGLE if base station data is lost @Takanose 20/4/30 ------------------------------------*/
+            
             return 1;
         }
     }
