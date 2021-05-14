@@ -1,5 +1,5 @@
 #!/bin/bash
-#MapIV Sekino
+#GMC
 
 cd $HOME/gmc_ws/RTKLIB/app/str2str/gcc
 
